@@ -1,0 +1,113 @@
+package org.example.service.impl;
+
+import org.example.dto.mapper.TourMapper;
+import org.example.dto.request.CreateTourRequest;
+import org.example.dto.request.UpdateTourRequest;
+import org.example.dto.response.TourResponse;
+import org.example.exception.CompanyNotFoundException;
+import org.example.exception.TourAlreadyExistsException;
+import org.example.exception.TourNotFoundException;
+import org.example.model.Tour;
+import org.example.repository.CompanyRepository;
+import org.example.repository.TourRepository;
+import org.example.service.abstractions.TourService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@Transactional
+public class TourServiceImpl implements TourService {
+
+    private final TourRepository tourRepository;
+    private final CompanyRepository companyRepository;
+    private final TourMapper tourMapper;
+
+    public TourServiceImpl(TourRepository tourRepository, CompanyRepository companyRepository, TourMapper tourMapper){
+        this.tourRepository = tourRepository;
+        this.companyRepository = companyRepository;
+        this.tourMapper = tourMapper;
+    }
+    @Transactional
+    public TourResponse createTour(CreateTourRequest tourRequest) {
+        Tour tour = tourMapper.toEntity(tourRequest);
+        tourRepository.findById(tour.getId())
+                .ifPresent(t -> {
+                    throw new TourAlreadyExistsException(
+                            "Tour already exists"
+                    );
+                });
+
+
+        companyRepository.findById(tour.getCompanyId()).orElseThrow(
+                () -> new CompanyNotFoundException(tour.getCompanyId())
+        );
+
+        //companyid and id
+        return tourMapper.toResponse(tourRepository.save(tour));
+    }
+    @Transactional(readOnly = true)
+    public TourResponse getById(int id) {
+        Tour tour = tourRepository.findById(id).orElseThrow(() ->
+                new TourNotFoundException(id)
+        );
+
+        tour.setViewCount(tour.getViewCount() + 1);
+        tourRepository.save(tour);
+        return tourMapper.toResponse(tour);
+    }
+
+    @Transactional(readOnly = true)
+    public List<TourResponse> getAll() {
+        List<TourResponse> tours = tourRepository.findAll().stream().map(tourMapper::toResponse).toList();
+        return tours;
+    }
+
+    @Transactional
+    public void deleteTour(int id) {
+        tourRepository.findById(id).orElseThrow(() ->
+                new TourNotFoundException("Tour with such id does not exist")
+        );
+        tourRepository.deleteById(id);
+    }
+
+    @Transactional
+    public TourResponse updateTour(int id, UpdateTourRequest updateTour) {
+        Tour tour = tourRepository.findById(id).orElseThrow(() ->
+                new TourNotFoundException("Tour with such id does not exist")
+        );
+
+        tour.setName(updateTour.getName());
+        tour.setCompanyId(updateTour.getCompanyId());
+        tour.setViewCount(updateTour.getViewCount());
+
+        tourRepository.save(tour);
+        return tourMapper.toResponse(tour);
+    }
+
+    @Transactional
+    public TourResponse patchTour(int id, UpdateTourRequest updateTour) {
+        Tour existingTour = tourRepository.findById(id).orElseThrow(() ->
+                new TourNotFoundException(id)
+        );
+        existingTour.setName(updateTour.getName());
+        existingTour.setCompanyId(updateTour.getCompanyId());
+        existingTour.setViewCount(updateTour.getViewCount());
+
+        if (updateTour.getName() != null) {
+            existingTour.setName(updateTour.getName());
+        }
+
+        if (updateTour.getCompanyId() >= 0){
+            existingTour.setCompanyId(updateTour.getCompanyId());
+        }
+
+        if (updateTour.getViewCount() >= 0){
+            existingTour.setViewCount(updateTour.getViewCount());
+        }
+
+        tourRepository.save(existingTour);
+        return tourMapper.toResponse(existingTour);
+    }
+}
